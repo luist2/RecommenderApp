@@ -7,13 +7,14 @@ using RecommenderApp_API.Entities;
 using RecommenderApp_API.Models;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace RecommenderApp_API.Services
 {
     public class AuthService(ApplicationDbContext context, IConfiguration configuration) : IAuthService
     {
-        public async Task<string?> LoginAsync(UserDTO request)
+        public async Task<TokenResponseDTO?> LoginAsync(UserDTO request)
         {
 
             var user = await context.Users
@@ -30,7 +31,16 @@ namespace RecommenderApp_API.Services
                 return null;
             }
 
-            return CreateToken(user);
+            return await CreateTokenResponse(user);
+        }
+
+        private async Task<TokenResponseDTO> CreateTokenResponse(User? user)
+        {
+            return new TokenResponseDTO
+            {
+                AccessToken = CreateToken(user),
+                RefreshToken = await GenerateAndSaveRefreshTokenAsync(user)
+            };
         }
 
         public async Task<User?> RegisterAsync(UserDTO request)
@@ -53,6 +63,49 @@ namespace RecommenderApp_API.Services
             return user;
         }
 
+        public async Task<TokenResponseDTO?> RefreshTokensAsync(RefreshTokenRequestDTO request)
+        {
+            var user = await ValidateRefreshTokenAsync(request.UserId, request.RefreshToken);
+            if (user is null)
+            {
+                return null;
+            }
+
+            return await CreateTokenResponse(user);
+        }
+
+        private async Task<User?> ValidateRefreshTokenAsync(Guid userId, string refreshToken)
+        {
+            var user = await context.Users.FindAsync(userId);
+
+            if (user == null || user.RefreshToken != refreshToken || user.RefreshTokenExpiryTime <= DateTime.UtcNow)
+            {
+                return null; // Invalid or expired refresh token
+            }
+
+            return user; // Valid user with valid refresh token
+
+        }
+
+        private string GenerateRefreshToken()
+        {
+            var randomNumber = new byte[32];
+            using (var rng = RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(randomNumber);
+            }
+            return Convert.ToBase64String(randomNumber);
+        }
+
+        private async Task<string> GenerateAndSaveRefreshTokenAsync(User user)
+        {
+            var refreshToken = GenerateRefreshToken();
+            user.RefreshToken = refreshToken;
+            user.RefreshTokenExpiryTime = DateTime.UtcNow.AddDays(7); // Set expiry time for 7 days
+            await context.SaveChangesAsync();
+            return refreshToken;
+        }
+
         private string CreateToken(User user)
         {
             var claims = new List<Claim>
@@ -71,7 +124,7 @@ namespace RecommenderApp_API.Services
                 issuer: configuration.GetValue<string>("AppSettings:Issuer"),
                 audience: configuration.GetValue<string>("AppSettings:Audience"),
                 claims: claims,
-                expires: DateTime.UtcNow.AddDays(1),
+                expires: DateTime.UtcNow.AddMinutes(15),
                 signingCredentials: creds
             );
 

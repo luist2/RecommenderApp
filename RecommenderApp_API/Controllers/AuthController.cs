@@ -1,14 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
-using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.IdentityModel.Tokens;
 using RecommenderApp_API.Entities;
 using RecommenderApp_API.Models;
 using RecommenderApp_API.Services;
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
-using System.Text;
 
 namespace RecommenderApp_API.Controllers
 {
@@ -32,16 +26,28 @@ namespace RecommenderApp_API.Controllers
         }
 
         [HttpPost("login")]
-        public async Task<ActionResult<string>> Login(UserDTO request)
+        public async Task<ActionResult<TokenResponseDTO>> Login(UserDTO request)
         {
 
-            var token = await authService.LoginAsync(request);
-            if (token is null)
+            var result = await authService.LoginAsync(request);
+            if (result is null)
             {
                 return BadRequest("Invalid username or password");
             }
 
-            return Ok(token);
+            return Ok(result);
+        }
+
+        [HttpPost("refresh-tokens")]
+        public async Task<ActionResult<TokenResponseDTO>> RefreshTokens(RefreshTokenRequestDTO request)
+        {
+            var result = await authService.RefreshTokensAsync(request);
+            if (result is null || result.AccessToken is null || result.RefreshToken is null)
+            {
+                return Unauthorized("Invalid refresh token");
+            }
+
+            return Ok(result);
         }
 
         [Authorize]
