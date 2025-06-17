@@ -12,7 +12,7 @@ using System.Text;
 
 namespace RecommenderApp_API.Services
 {
-    public class AuthService(ApplicationDbContext context, IConfiguration configuration) : IAuthService
+    public class AuthService(AppDbContext context, IConfiguration configuration) : IAuthService
     {
         public async Task<TokenResponseDTO?> LoginAsync(UserDTO request)
         {

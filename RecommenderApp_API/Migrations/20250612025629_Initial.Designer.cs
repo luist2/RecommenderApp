@@ -11,7 +11,7 @@ using RecommenderApp_API.Data;
 
 namespace RecommenderApp_API.Migrations
 {
-    [DbContext(typeof(ApplicationDbContext))]
+    [DbContext(typeof(AppDbContext))]
     [Migration("20250612025629_Initial")]
     partial class Initial
     {

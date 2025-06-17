@@ -10,5 +10,6 @@ namespace RecommenderApp_API.Entities
         public string Role { get; set; } = string.Empty;
         public string? RefreshToken { get; set; } = null;
         public DateTime? RefreshTokenExpiryTime { get; set; }
+        public ICollection<UserMovie> UserMovies { get; set; } = new List<UserMovie>();
     }
 }

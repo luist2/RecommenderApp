@@ -11,7 +11,7 @@ using RecommenderApp_API.Data;
 
 namespace RecommenderApp_API.Migrations
 {
-    [DbContext(typeof(ApplicationDbContext))]
+    [DbContext(typeof(AppDbContext))]
     [Migration("20250616075911_AddRefreshTokens")]
     partial class AddRefreshTokens
     {
