@@ -34,6 +34,8 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
 
 
 builder.Services.AddScoped<IAuthService, AuthService>();
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<IMovieService, MovieService>();
 
 var app = builder.Build();
 
