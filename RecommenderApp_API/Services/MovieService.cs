@@ -1,5 +1,6 @@
 ﻿using Microsoft.EntityFrameworkCore;
 using RecommenderApp_API.Data;
+using RecommenderApp_API.DTOs;
 using RecommenderApp_API.Entities;
 using RecommenderApp_API.Models;
 
@@ -62,6 +63,40 @@ namespace RecommenderApp_API.Services
             return movies;
 
 
+        }
+
+        public async Task<List<UserMovieResponseDTO>> GetUserMoviesAsync(Guid userId, MovieStatus? status, int pageNumber = 1, int pageSize = 20, CancellationToken cancellationToken = default)
+        {
+            // Construir la consulta para obtener las películas del usuario
+            var query = _context.UserMovies
+                .Include(um => um.Movie)
+                .Where(um => um.UserId == userId);
+
+            // Filtrar por estado si se proporciona
+            if (status.HasValue)
+            {
+                query = query.Where(um => um.Status == status.Value);
+            }
+
+            // Paginación: calcular el número de registros a omitir
+            var skip = (pageNumber - 1) * pageSize;
+
+            // Ejecutar la consulta y mapear los resultados a UserMovieResponseDTO
+            var result = await query
+                .Skip(skip)
+                .Take(pageSize)
+                .Select(um => new UserMovieResponseDTO
+                {
+                    TmdbId = um.Movie.TmdbId,
+                    Title = um.Movie.Title,
+                    PosterUrl = um.Movie.PosterUrl,
+                    Overview = um.Movie.Overview,
+                    ReleaseDate = um.Movie.ReleaseDate,
+                    Status = um.Status
+                })
+                .ToListAsync(cancellationToken);
+
+            return result;
         }
 
         public async Task MarkMovieAsync(Guid userId, int tmdbId, MovieStatus status, CancellationToken cancellationToken)
