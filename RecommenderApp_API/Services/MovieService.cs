@@ -22,34 +22,80 @@ namespace RecommenderApp_API.Services
         }
         public async Task<List<Movie>> GetRecommendationsAsync(Guid userId, CancellationToken cancellationToken = default)
         {
-            // Obtener IDs de pelicuas ignoradas por el usuario
             var excludeIds = await _context.UserMovies
-            .Where(um => um.UserId == userId &&
-                        (um.Status == MovieStatus.Watched || um.Status == MovieStatus.Ignored))
-            .Select(um => um.Movie.TmdbId)
-            .ToListAsync(cancellationToken);
+                .Where(um => um.UserId == userId &&
+                             (um.Status == MovieStatus.Watched || um.Status == MovieStatus.Ignored))
+                .Select(um => um.Movie.TmdbId)
+                .ToListAsync(cancellationToken);
 
-            // Llamar API de TMDB
-            var url = $"https://api.themoviedb.org/3/discover/movie?api_key={_apikey}&sort_by=popularity.desc";
+            // 1. Obtener películas favoritas del usuario
+            var favoriteTmdbIds = await _context.UserMovies
+                .Include(um => um.Movie)
+                .Where(um => um.UserId == userId && um.Status == MovieStatus.Favorite)
+                .Select(um => um.Movie.TmdbId)
+                .ToListAsync(cancellationToken);
 
+            List<int> topGenres = [];
+
+            if (favoriteTmdbIds.Any())
+            {
+                // 2. Obtener los géneros de esas pelis desde TMDB
+                var genreCount = new Dictionary<int, int>();
+
+                foreach (var tmdbId in favoriteTmdbIds)
+                {
+                    var urlDetails = $"https://api.themoviedb.org/3/movie/{tmdbId}?api_key={_apikey}";
+                    var movieDetails = await _httpClient.GetFromJsonAsync<TmdbMovieDetailResponse>(urlDetails, cancellationToken);
+                    if (movieDetails?.genres != null)
+                    {
+                        foreach (var genre in movieDetails.genres)
+                        {
+                            if (genreCount.ContainsKey(genre.id))
+                                genreCount[genre.id]++;
+                            else
+                                genreCount[genre.id] = 1;
+                        }
+                    }
+                }
+
+                // 3. Obtener los géneros más frecuentes (top 3 por ejemplo)
+                topGenres = genreCount
+                    .OrderByDescending(g => g.Value)
+                    .Take(3)
+                    .Select(g => g.Key)
+                    .ToList();
+            }
+
+            // 4. Construir URL de recomendación personalizada
+            string url;
+            if (topGenres.Any())
+            {
+                var genreParam = string.Join(",", topGenres);
+                url = $"https://api.themoviedb.org/3/discover/movie?api_key={_apikey}&sort_by=popularity.desc&with_genres={genreParam}";
+            }
+            else
+            {
+                url = $"https://api.themoviedb.org/3/discover/movie?api_key={_apikey}&sort_by=popularity.desc";
+            }
+
+            // 5. Llamar a la API
             var response = await _httpClient.GetFromJsonAsync<TmdbDiscoverResponse>(url, cancellationToken);
             if (response == null || response.results == null) return new List<Movie>();
 
-            // Filtrar y mapear los resultados a la entidad Movie
+            // 6. Filtrar, mapear y guardar
             var movies = response.results
-                .Where(m => !excludeIds.Contains(m.id)) // Excluir películas ignoradas
-                .Take(10) // Limitar a 10 resultados
+                .Where(m => !excludeIds.Contains(m.id))
+                .Take(10)
                 .Select(m => new Movie
                 {
                     TmdbId = m.id,
                     Title = m.title,
                     Overview = m.overview,
                     PosterUrl = string.IsNullOrEmpty(m.poster_path) ? null : $"https://image.tmdb.org/t/p/w500{m.poster_path}",
-                    ReleaseDate = DateTime.Parse(m.release_date)
+                    ReleaseDate = DateTime.TryParse(m.release_date, out var date) ? date : null
                 })
                 .ToList();
 
-            // Guardar las películas en la base de datos si no existen
             foreach (var movie in movies)
             {
                 if (!await _context.Movies.AnyAsync(m => m.TmdbId == movie.TmdbId, cancellationToken))
@@ -61,9 +107,8 @@ namespace RecommenderApp_API.Services
             await _context.SaveChangesAsync(cancellationToken);
 
             return movies;
-
-
         }
+
 
         public async Task<List<UserMovieResponseDTO>> GetUserMoviesAsync(Guid userId, MovieStatus? status, int pageNumber = 1, int pageSize = 20, CancellationToken cancellationToken = default)
         {
