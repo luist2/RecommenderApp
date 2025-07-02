@@ -189,7 +189,6 @@ namespace RecommenderApp_API.Services
             await _context.SaveChangesAsync(cancellationToken);
         }
 
-
         private async Task<TmdbMovieResult?> GetMovieByIdAsync(int tmdbId, CancellationToken cancellationToken)
         {
             var url = $"https://api.themoviedb.org/3/movie/{tmdbId}?api_key={_apikey}";
